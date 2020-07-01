@@ -1,7 +1,9 @@
 import io
-from PIL import Image
 import logging
+
 import torchvision.transforms as transforms
+from PIL import Image
+
 from src.config import Config
 
 logger = logging.getLogger(__name__)
@@ -9,11 +11,16 @@ logger = logging.getLogger(__name__)
 
 def transform_image_to_imagenet(image_bytes):
     """
-    Preprocess image to match size of standard ImageNet images, e.g. 224x224
-    :param image_bytes:
-    :return:
+    Preprocess image to match size of standard ImageNet images 224x224, convert to Pytorch tensor and normalize.
+
+    Args:
+        image_bytes (bytes): Image to process
+
+    Returns:
+        Tensor: 4-dimensional PyTorch tensor where first dimension is batch (of size 1).
     """
-    my_transforms = transforms.Compose([transforms.Resize([224, 224]),
+    my_transforms = transforms.Compose([transforms.Resize(255),
+                                        transforms.CenterCrop(224),
                                         transforms.ToTensor(),
                                         transforms.Normalize(
                                             [0.485, 0.456, 0.406],
@@ -27,6 +34,16 @@ def transform_image_to_imagenet(image_bytes):
 
 
 def transform_image(image_bytes, model_name, conf):
+    """
+    Apply transformation corresponding to the model. For torchvision models see func `transform_image_to_imagenet`.
+    Args:
+        image_bytes (bytes): Image to process
+        model_name (str): Model name to be applied to transformed image.
+        conf (Config): Config file
+
+    Returns:
+        Tensor: 4-dimensional PyTorch tensor where first dimension is batch (of size 1).
+    """
     logger.debug(f'Model name: {model_name}')
     if model_name in conf.torchvision_models:
         return transform_image_to_imagenet(image_bytes)
