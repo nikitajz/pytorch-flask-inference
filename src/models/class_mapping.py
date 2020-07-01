@@ -12,7 +12,7 @@ def load_class_mapping(model_name, conf):
         dict: Class mapping {class_idx: class_name}
     """
     if model_name in conf.torchvision_models:
-        imagenet_mapping = json.load(open('data/imagenet_class_mapping.json'))
+        imagenet_mapping = json.load(open('src/data/imagenet_class_mapping.json'))
         imagenet_mapping = {class_idx: class_name for class_idx, [_, class_name] in imagenet_mapping.items()}
         return imagenet_mapping
     elif model_name in conf.custom_models:

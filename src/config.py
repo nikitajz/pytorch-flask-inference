@@ -5,7 +5,7 @@ class Config:
     # specify custom models here and add corresponding condition in `load_model`, `transform_image` and `class_mapping`
     custom_models = []
     # only a few models listed here for simplicity
-    torchvision_models = ['resnext101_32x8d', 'resnext101_32x8d', 'vgg16', 'vgg16_bn']
+    torchvision_models = ['resnext50_32x4d', 'resnext101_32x8d', 'vgg16', 'vgg16_bn']
     allowed_models = []
 
     def __init__(self):

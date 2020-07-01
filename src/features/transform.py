@@ -1,10 +1,9 @@
 import io
 import logging
 
+import torchvision
 import torchvision.transforms as transforms
 from PIL import Image
-
-from src.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -33,21 +32,20 @@ def transform_image_to_imagenet(image_bytes):
     return my_transforms(image).unsqueeze(0)
 
 
-def transform_image(image_bytes, model_name, conf):
+def transform_image(image_bytes, model_name):
     """
     Apply transformation corresponding to the model. For torchvision models see func `transform_image_to_imagenet`.
     Args:
         image_bytes (bytes): Image to process
         model_name (str): Model name to be applied to transformed image.
-        conf (Config): Config file
 
     Returns:
         Tensor: 4-dimensional PyTorch tensor where first dimension is batch (of size 1).
     """
     logger.debug(f'Model name: {model_name}')
-    if model_name in conf.torchvision_models:
+    if hasattr(torchvision.models, model_name):
         return transform_image_to_imagenet(image_bytes)
-    elif model_name in conf.custom_models:
+    elif model_name == "custom_model_name":
         raise NotImplementedError("No preprocessor for the specified model defined")
     else:
         raise ValueError("Transformation for the specified model is not available")

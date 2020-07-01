@@ -11,30 +11,36 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 
+@app.route('/')
+def health_check():
+    return {"status": "ok"}
+
+
 @app.route('/predict', methods=['POST'])
 def predict():
     if request.method == 'POST':
         file = request.files['file']
         img_bytes = file.read()
-        predicted_class = get_prediction(image_bytes=img_bytes, model_name=cfg.model_name, conf=cfg)
-        return jsonify(predicted_class)
+        prediction_result = get_prediction(image_bytes=img_bytes, model_name=cfg.model_name, device=cfg.device)
+        return jsonify(prediction_result)
     else:
         raise ValueError("Incorrect request type, use POST method.")
 
 
-def get_prediction(image_bytes, model_name, conf):
+def get_prediction(image_bytes, model_name, device):
     """
     For provided image and model name, perform necessary transformations, apply model (forward pass) and select best
     prediction.
     Args:
         image_bytes (bytes): Image to process
         model_name (str): Model name to apply corresponding transformation.
-        conf (Config): config file
+        device (str or torch.device): device to run prediction on
 
     Returns:
         dict: {class_idx: <class_idx>, class_name: <class_name>}
     """
-    tensor = transform_image(image_bytes=image_bytes, model_name=model_name, conf=conf)
+    tensor = transform_image(image_bytes=image_bytes, model_name=model_name)
+    tensor = tensor.to(device)
     outputs = model.forward(tensor)
     _, y_hat = outputs.max(1)
     predicted_class_idx = str(y_hat.item())
@@ -43,12 +49,13 @@ def get_prediction(image_bytes, model_name, conf):
     return {'class_idx': predicted_class_idx, 'class_name': predicted_class_name}
 
 
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.DEBUG)
+cfg = Config()
+model = load_model(model_name=cfg.model_name, conf=cfg)
+model.eval()
+model.to(cfg.device)
+class_mapping = load_class_mapping(cfg.model_name, cfg)
+
 if __name__ == '__main__':
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                        level=logging.DEBUG)
-    cfg = Config()
-    model = load_model(model_name=cfg.model_name, conf=cfg)
-    model.eval()
-    model.to(cfg.device)
-    class_mapping = load_class_mapping(cfg.model_name, cfg)
     app.run()
