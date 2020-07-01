@@ -9,4 +9,4 @@ class Config:
     allowed_models = []
 
     def __init__(self):
-        self.allowed_models = self.allowed_models + self.torchvision_models
+        self.allowed_models = self.torchvision_models + self.custom_models

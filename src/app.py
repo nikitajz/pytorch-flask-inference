@@ -49,13 +49,12 @@ def get_prediction(image_bytes, model_name, device):
     return {'class_idx': predicted_class_idx, 'class_name': predicted_class_name}
 
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.DEBUG)
-cfg = Config()
-model = load_model(model_name=cfg.model_name, conf=cfg)
-model.eval()
-model.to(cfg.device)
-class_mapping = load_class_mapping(cfg.model_name, cfg)
-
 if __name__ == '__main__':
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                        level=logging.DEBUG)
+    cfg = Config()
+    model = load_model(model_name=cfg.model_name, conf=cfg)
+    model.eval()
+    model.to(cfg.device)
+    class_mapping = load_class_mapping(cfg.model_name, cfg)
     app.run()
