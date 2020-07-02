@@ -2,7 +2,6 @@ import pytest
 import torchvision
 
 from src.models.model_loader import get_available_models, load_model
-from tests.utils import MockModel
 
 
 @pytest.fixture
@@ -27,17 +26,11 @@ def test_available_models(get_config_file):
 def test_load_model_torchvision(monkeypatch, get_config_file):
     model_name = 'vgg16'
 
-    def mock_load(*args, **kwargs):
-        return MockModel(*args, **kwargs)
-
     conf = get_config_file
     conf.torchvision_models = ['resnext101_32x8d', 'resnext50_32x4d', 'vgg16',
                                'vgg16_bn', 'vgg19', 'vgg19_bn']
-    monkeypatch.setattr(torchvision.models, model_name, mock_load)
-
-    model = load_model(model_name, conf)
-    assert model._get_name().lower() == model_name, "Model name should correspond to model class name"
-    assert model.pretrained is True, "Model should load pretrained weights"
+    model = load_model(model_name, conf, pretrained=False)
+    assert model.__class__.__name__.lower() in model_name, "Model name should correspond to model class name"
 
 
 def test_load_model_custom(get_config_file):
