@@ -1,6 +1,6 @@
 import logging
 
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, url_for, redirect
 
 from src.config import Config
 from src.features.transform import transform_image
@@ -9,6 +9,9 @@ from src.models.model_loader import load_model, get_available_models
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
+cfg = Config()
+model = load_model(model_name=cfg.model_name, conf=cfg)
+class_mapping = load_class_mapping(cfg.model_name, cfg)
 
 
 @app.route('/status')
@@ -67,6 +70,8 @@ def upload_file():
                                    model_name=model_name,
                                    predicted_class_name=pred_result['class_name'],
                                    predicted_class_id=pred_result['class_id'])
+        else:
+            return redirect(url_for('upload_file'))
 
     return render_template("image_upload.html",
                            default_model=cfg.model_name,
@@ -76,9 +81,4 @@ def upload_file():
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         level=logging.DEBUG)
-    cfg = Config()
-    model = load_model(model_name=cfg.model_name, conf=cfg)
-    model.eval()
-    model.to(cfg.device)
-    class_mapping = load_class_mapping(cfg.model_name, cfg)
     app.run()
