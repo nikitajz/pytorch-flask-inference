@@ -14,7 +14,7 @@ app = Flask(__name__)
 @app.route('/status')
 @app.route('/health-check')
 def health_check():
-    return {"status": "ok"}
+    return jsonify({"status": "ok"})
 
 
 @app.route('/predict', methods=['POST'])
@@ -44,6 +44,7 @@ def get_prediction(image_bytes, model_name, device):
     tensor = tensor.to(device)
     outputs = model.forward(tensor)
     _, y_hat = outputs.max(1)
+    # TODO: abstract out once custom model with different mapping is implemented
     predicted_class_idx = str(y_hat.item())
     predicted_class_id = class_mapping[predicted_class_idx][0]
     predicted_class_name = class_mapping[predicted_class_idx][1]
