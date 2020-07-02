@@ -1,7 +1,5 @@
 import torchvision
 
-from src.config import Config
-
 
 def load_model(model_name, conf):
     """
@@ -20,3 +18,7 @@ def load_model(model_name, conf):
         raise NotImplementedError("No custom models added so far")
     else:
         raise ValueError(f"Invalid model name to load. Available options are: {conf.allowed_models}")
+
+
+def get_available_models(conf):
+    return [model_name for model_name in conf.allowed_models if model_name != conf.model_name]
