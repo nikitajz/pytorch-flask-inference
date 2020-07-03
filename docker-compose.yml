@@ -2,7 +2,7 @@ version: "3.8"
 services:
   webapp:
     build: .
-    command: gunicorn -b 0.0.0.0:5050 src.app:app
+    command: gunicorn -w 4 -b 0.0.0.0:5050 src.app:app
     ports:
       - "5050:5050"
     volumes:
