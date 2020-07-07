@@ -31,7 +31,17 @@
           padding: 15px;
           margin: auto;
         }
+        .model-name-dropdown {
+          display: flex;
+          flex-wrap: no-wrap;
+        }
 
+        .model-name-dropdown select {
+          flex: 1 1 1%;
+        }
+        .model-name-dropdown div {
+          flex: 0 0 1%;
+        }
     </style>
     <title>Predict Image class using PyTorch</title>
 </head>
@@ -41,7 +51,7 @@
     <!--    <img class="mb-4" src="/docs/4.5/assets/brand/bootstrap-solid.svg" alt="" width="72" height="72">-->
     <h3 class="h3 mb-3 font-weight-normal">Upload image to classify</h3>
 
-    <div class="input-group mb-1">
+    <div class="input-group mb-1 model-name-dropdown">
         <select class="select-model" id="inputGroupSelect01" name="model-name">
             <option selected>{{ default_model }}</option>
             {% for model_name in available_models %}
