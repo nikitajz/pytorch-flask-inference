@@ -1,6 +1,7 @@
 import logging
 
-from flask import Flask, jsonify, request, render_template, url_for, redirect
+import requests as req
+from flask import Flask, jsonify, request, render_template, url_for, redirect, Response
 
 from src.config import Config
 from src.features.transform import transform_image
@@ -20,13 +21,36 @@ def health_check():
     return jsonify({"status": "ok"})
 
 
-@app.route('/predict', methods=['POST'])
+@app.route('/predict', methods=['POST', 'GET'])
 def predict():
+    """
+    Use POST method to submit an image file or GET method to submit an encoded url.
+    To test use the following examples.
+    POST method with an image file:
+    `curl -X POST -F file=@"<path_to_file.jpg>" http://<flask_domain>:5000/predict`
+    GET method with encoded url:
+    `curl -G --data-urlencode "url=<http://example.com/img.jpg>" http://<flask_domain>:5000/predict`
+
+    Returns:
+        dict: {class_id: <class_id>, class_name: <class_name>}
+    """
     if request.method == 'POST':
         file = request.files['file']
         img_bytes = file.read()
         prediction_result = get_prediction(image_bytes=img_bytes, model_name=cfg.model_name, device=cfg.device)
         return jsonify(prediction_result)
+    elif request.method == 'GET':
+        img_url = request.args.get('url', type=str)
+        logger.debug(f'URL: {img_url}')
+        response = req.get(img_url)
+        if response.status_code == 200:
+            img_bytes = response.content
+            prediction_result = get_prediction(image_bytes=img_bytes, model_name=cfg.model_name, device=cfg.device)
+            return jsonify(prediction_result)
+        else:
+            err_msg = "Unable to retrieve the message from requested url"
+            logger.error(err_msg)
+            return Response(err_msg, status=400)
     else:
         raise ValueError("Incorrect request type, use POST method.")
 
