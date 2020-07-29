@@ -8,7 +8,6 @@ from src.features.transform import transform_image
 from src.models.class_mapping import load_class_mapping
 from src.models.model_loader import load_model, get_available_models
 
-logger = logging.getLogger(__name__)
 app = Flask(__name__)
 cfg = Config()
 model = load_model(model_name=cfg.model_name, conf=cfg)
@@ -41,16 +40,16 @@ def predict():
         return jsonify(prediction_result)
     elif request.method == 'GET':
         img_url = request.args.get('url', type=str)
-        logger.debug(f'URL: {img_url}')
+        app.logger.debug(f'URL: {img_url}')
         response = req.get(img_url)
         if response.status_code == 200:
             img_bytes = response.content
             prediction_result = get_prediction(image_bytes=img_bytes, model_name=cfg.model_name, device=cfg.device)
             return jsonify(prediction_result)
         else:
-            err_msg = "Unable to retrieve the message from requested url"
-            logger.error(err_msg)
-            return Response(err_msg, status=400)
+            err_msg = "Unable to get the image from provided url"
+            app.logger.warning(err_msg)
+            return Response(err_msg, status=404)
     else:
         raise ValueError("Incorrect request type, use POST method.")
 
@@ -75,7 +74,7 @@ def get_prediction(image_bytes, model_name, device):
     predicted_class_idx = str(y_hat.item())
     predicted_class_id = class_mapping[predicted_class_idx][0]
     predicted_class_name = class_mapping[predicted_class_idx][1]
-    logger.info(f"Predicted class: {predicted_class_name} ({predicted_class_id})")
+    app.logger.info(f"Predicted class: {predicted_class_name} ({predicted_class_id})")
     return {'class_id': predicted_class_id, 'class_name': predicted_class_name}
 
 
