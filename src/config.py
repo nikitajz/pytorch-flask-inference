@@ -2,6 +2,8 @@
 class Config:
     model_name = 'resnext101_32x8d'
     device = 'cpu'  # 'cuda:0'
+    batch_size = 16
+    num_workers = 4
     # specify custom models here and add corresponding condition in `load_model`, `transform_image` and `class_mapping`
     custom_models = []
     # only a few models listed here for simplicity

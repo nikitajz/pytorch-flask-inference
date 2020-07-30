@@ -1,13 +1,15 @@
 import json
 
+import mock
 import numpy as np
 import pytest
 import torch
+import torchvision
 from PIL import Image
-from mock import patch
 
 from src import app
 from src.config import Config
+from src.features.transform import TransformImage
 from tests.utils import convert_image_to_bytes, MockModel
 
 
@@ -30,22 +32,27 @@ def test_health_check(client):
     assert status == {"status": "ok"}
 
 
+def random_tensor_img(*args, **kwargs):
+    """Random tensor similar to transformed image."""
+    return torch.rand(1, 3, 244, 244)
+
+
 def test_get_prediction(monkeypatch, example_large_image):
-    with patch('src.features.transform.transform_image') as transform_image:
-        transform_image.return_value = torch.rand(1, 3, 244, 244)
+    with mock.patch.object(TransformImage, '__call__', new=random_tensor_img):
         img_bytes = convert_image_to_bytes(example_large_image)
         mock_outputs = np.random.uniform(0, 0.7, 1000)
         mock_outputs[3] = 0.99  # "tiger_shark"
         mock_outputs = torch.Tensor(mock_outputs).unsqueeze(0)
-        app.model = MockModel()
+        app.default_model = MockModel()
 
         def mock_return(*args):
             return mock_outputs
 
-        monkeypatch.setattr(app.model, "forward", mock_return)
-        app.class_mapping = json.load(open('src/data/imagenet_class_mapping.json'))
+        model = torchvision.models.vgg11()
+        monkeypatch.setattr(model, "forward", mock_return)
+        app.default_class_mapping = json.load(open('src/data/imagenet_class_mapping.json'))
         expected_prediction = {'class_id': "n01491361", 'class_name': "tiger_shark"}
-        actual_prediction = app.get_prediction(img_bytes, "vgg11", "cpu")
+        actual_prediction = app.get_prediction(img_bytes, "cpu", model=model, transform_image=TransformImage("vgg11"))
         assert expected_prediction == actual_prediction
 
 

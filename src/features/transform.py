@@ -29,23 +29,37 @@ def transform_image_to_imagenet(image_bytes):
         logger.debug(f'Converting the image to RGB scheme. Original: {image.getbands()}')
         image = image.convert('RGB')
     logger.debug(f'Image shape: {image.size}')
-    return my_transforms(image).unsqueeze(0)
+    return my_transforms(image)
 
 
-def transform_image(image_bytes, model_name):
-    """
-    Apply transformation corresponding to the model. For torchvision models see func `transform_image_to_imagenet`.
-    Args:
-        image_bytes (bytes): Image to process
-        model_name (str): Model name to be applied to transformed image.
+class TransformImage:
+    def __init__(self, model_name):
+        """
+        Apply transformation corresponding to the model. For torchvision models see func `transform_image_to_imagenet`.
+        Args:
+            model_name (str): Model name to be applied to transformed image.
 
-    Returns:
-        Tensor: 4-dimensional PyTorch tensor where first dimension is batch (of size 1).
-    """
-    logger.debug(f'Model name: {model_name}')
-    if hasattr(torchvision.models, model_name):
-        return transform_image_to_imagenet(image_bytes)
-    elif model_name == "custom_model_name":
-        raise NotImplementedError("No preprocessor for the specified model defined")
-    else:
-        raise ValueError("Transformation for the specified model is not available")
+        Returns:
+            Tensor: 3-dimensional PyTorch tensor. Batch dimension should be added separately.
+        """
+        logger.debug(f'Model name: {model_name}')
+        if hasattr(torchvision.models, model_name):
+            self.transform = transform_image_to_imagenet
+        elif model_name == "custom_model_name":
+            raise NotImplementedError("No preprocessor for the specified model defined")
+        else:
+            raise ValueError("Transformation for the specified model is not available")
+
+    def __call__(self, image_bytes, *args, **kwargs):
+        """
+        Apply transformation to the image.
+
+        Args:
+            image_bytes: bytes
+            *args:
+            **kwargs:
+
+        Returns:
+            image (Image): Transformed image
+        """
+        return self.transform(image_bytes)
