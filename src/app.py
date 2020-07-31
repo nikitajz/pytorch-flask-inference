@@ -1,15 +1,21 @@
 import json
 import logging
+import time
 
 import requests as req
-from flask import Flask, jsonify, request, render_template, url_for, redirect, Response
+import torch
+from flask import Flask, jsonify, request, render_template, url_for, redirect, Response, g
 from torch.utils.data import DataLoader
+from werkzeug import exceptions
 
 from src.config import Config
 from src.data_utils import ImageDataset
 from src.features.transform import TransformImage
 from src.models.class_mapping import load_class_mapping
 from src.models.model_loader import load_model, get_available_models
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
 
 app = Flask(__name__)
 cfg = Config()
@@ -18,6 +24,19 @@ default_transform_image = TransformImage(cfg.model_name)
 default_class_mapping = load_class_mapping(cfg.model_name, cfg)
 
 IMAGE_FILE_TYPES = ['jpg', 'jpeg', 'png', 'tiff']
+
+
+@app.before_request
+def before_request():
+    g.start = time.time()
+
+
+@app.after_request
+def after_request(response):
+    te = time.time()
+    if response.response and (200 <= response.status_code < 300):
+        app.logger.info(f'Request completed in {te - g.start:.3f} sec')
+    return response
 
 
 @app.route('/status')
@@ -40,8 +59,20 @@ def predict():
         dict: {class_id: <class_id>, class_name: <class_name>}
     """
     if request.method == 'POST':
-        file = request.files['file']
-        img_bytes = file.read()
+        try:
+            file = request.files['file']
+            if file.filename == '' or file.filename is None:
+                raise exceptions.BadRequestKeyError('No file provided')
+            elif file.content_type.split('/')[0] != 'image':
+                app.logger.warning('File is not an image')
+                return Response('File type should be image.', 400)
+            img_bytes = file.read()
+        except exceptions.BadRequestKeyError as exc:
+            app.logger.warning(exc)
+            return Response("No file provided or file is corrupted.", 400)
+        except Exception as exc:
+            app.logger.error(exc)
+            return Response("Unknown server error", 500)
         prediction_result = get_prediction(image_bytes=img_bytes, device=cfg.device, model=default_model,
                                            transform_image=default_transform_image)
         return jsonify(prediction_result)
@@ -59,7 +90,7 @@ def predict():
             app.logger.warning(err_msg)
             return Response(err_msg, status=404)
     else:
-        raise ValueError("Incorrect request type, use either GET or POST method.")
+        raise ValueError("Incorrect request type, use either GET or POST methods.")
 
 
 def get_prediction(image_bytes, device, model, transform_image):
@@ -76,14 +107,15 @@ def get_prediction(image_bytes, device, model, transform_image):
     Returns:
         dict: {class_id: <class_id>, class_name: <class_name>}
     """
-    tensor = transform_image(image_bytes=image_bytes).unsqueeze(0)
+    tensor = transform_image(image_bytes=image_bytes)
+    tensor.unsqueeze_(0)
     tensor = tensor.to(device)
-    outputs = model.forward(tensor)
-    _, y_hat = outputs.max(1)
-    # TODO: abstract out once custom model with different mapping is implemented
-    predicted_class_idx = str(y_hat.item())
-    predicted_class_id = default_class_mapping[predicted_class_idx][0]
-    predicted_class_name = default_class_mapping[predicted_class_idx][1]
+    with torch.no_grad():
+        outputs = model.forward(tensor)
+        _, y_hat = outputs.max(1)
+        # TODO: abstract out once custom model with different mapping is implemented
+        predicted_class_idx = str(y_hat.item())
+    predicted_class_id, predicted_class_name = default_class_mapping[predicted_class_idx]
     app.logger.info(f"Predicted class: {predicted_class_name} ({predicted_class_id})")
     return {'class_id': predicted_class_id, 'class_name': predicted_class_name}
 
@@ -98,11 +130,7 @@ def upload_file():
                 img_bytes = file.read()
                 model_name = request.form['model-name']
                 if model_name != cfg.model_name:
-                    app.logger.info(f'Reloading model: {model_name}')
-                    global default_model, default_class_mapping, default_transform_image
-                    default_model = load_model(model_name, cfg)
-                    default_class_mapping = load_class_mapping(model_name, cfg)
-                    default_transform_image = TransformImage(model_name)
+                    reload_model(model_name)
                 prediction_result = get_prediction(img_bytes, cfg.device, default_model, default_transform_image)
 
                 return render_template("prediction_result.html",
@@ -134,11 +162,25 @@ def predict_batch():
         else:
             return Response("Incorrect file type", 415)
         app.logger.debug(f'File length: {len(urls)} Samples:\n{urls[:2]}')
-        prediction_result = get_batch_prediction(urls)
-        return jsonify(prediction_result)
+        data_loader = get_dataloader(urls)
+        predictions = predict_all_samples(data_loader, default_model)
+        return jsonify(predictions)
 
 
-def get_batch_prediction(url_list):
+def reload_model(model_name):
+    """
+    Load another model into global variable along with corresponding class mapping and transform function.
+    Args:
+        model_name: str
+    """
+    app.logger.info(f'Reloading model: {model_name}')
+    global default_model, default_class_mapping, default_transform_image
+    default_model = load_model(model_name, cfg)
+    default_class_mapping = load_class_mapping(model_name, cfg)
+    default_transform_image = TransformImage(model_name)
+
+
+def get_dataloader(url_list):
     batch_size = min(len(url_list), cfg.batch_size)
     app.logger.debug(f'Batch size: {batch_size}')
     dataset = ImageDataset(url_list,
@@ -148,22 +190,21 @@ def get_batch_prediction(url_list):
                             batch_size=batch_size,
                             shuffle=False,
                             num_workers=cfg.num_workers)
-    predictions = batch_prediction(dataloader, default_model)
-    return predictions
+    return dataloader
 
 
-def batch_prediction(dataloader, model):
-    predicted = list()
+def predict_all_samples(dataloader, model):
+    all_predictions = list()
     for batch_sample in dataloader:
-        outputs = model.forward(batch_sample)
-        _, predicted_class_indices = outputs.max(1)
-        # TODO: abstract out once custom model with different mapping is implemented
-        predictions = [tuple(default_class_mapping[str(y_hat)]) for y_hat in predicted_class_indices.tolist()]
-        predicted.extend(predictions)
-    return predicted
+        with torch.no_grad():
+            outputs = model.forward(batch_sample.to(cfg.device))
+            _, predicted_class_indices = outputs.max(1)
+            batch_predictions = [tuple(default_class_mapping[str(y_hat)]) for y_hat in predicted_class_indices.tolist()]
+        all_predictions.extend(batch_predictions)
+    return all_predictions
 
 
 if __name__ == '__main__':
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                        level=logging.DEBUG)
+    app.logger.setLevel = logging.DEBUG
+    app.logger.debug(f'Device: {cfg.device} Batch size: {cfg.batch_size}')
     app.run()

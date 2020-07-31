@@ -7,8 +7,6 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from torch.utils.data import Dataset
 
-# >>> s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
-
 s3_resource = boto3.resource('s3', config=Config(signature_version=UNSIGNED))
 
 
@@ -31,31 +29,9 @@ def s3_get_file(url):
         return file_content
     except ClientError as exc:
         if int(exc.response["Error"]["Code"]) == 404:
-            raise EnvironmentError("file {} not found".format(url))
+            raise FileNotFoundError("file {} not found".format(url))
         else:
             raise
-
-
-def download_image(url):
-    """
-    Download image file from http(s) or S3 url.
-    Args:
-        url: http(s)- or S3-compliant url
-
-    Returns:
-        Image: bytes
-    """
-    if url.startswith("s3://"):
-        img_bytes = s3_get_file(url)
-    elif url.startswith("http"):
-        response = requests.get(url)
-        if response.status_code == 200:
-            img_bytes = response.content
-        else:
-            raise FileNotFoundError
-    else:
-        raise ValueError(f"Incorrect url scheme: {url}")
-    return img_bytes
 
 
 class ImageDataset(Dataset):
@@ -69,11 +45,33 @@ class ImageDataset(Dataset):
         self.urls = urls
         self.transform = transform
 
+    @staticmethod
+    def _download_image(url):
+        """
+        Download image file from http(s) or S3 url.
+        Args:
+            url: http(s)- or S3-compliant url
+
+        Returns:
+            Image: bytes
+        """
+        if url.startswith("s3://"):
+            img_bytes = s3_get_file(url)
+        elif url.startswith("http"):
+            response = requests.get(url)
+            if response.status_code == 200:
+                img_bytes = response.content
+            else:
+                raise FileNotFoundError
+        else:
+            raise ValueError(f"Incorrect url scheme: {url}")
+        return img_bytes
+
     def __len__(self):
         return len(self.urls)
 
     def __getitem__(self, idx):
-        img = download_image(self.urls[idx])
+        img = self._download_image(self.urls[idx])
         if self.transform:
             img = self.transform(img)
         return img
