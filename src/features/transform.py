@@ -9,14 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 def transform_image_to_imagenet(image_bytes):
-    """
-    Preprocess image to match size of standard ImageNet images 224x224, convert to Pytorch tensor and normalize.
+    """Preprocess image to match size of standard ImageNet images 224x224, convert to Pytorch tensor and normalize.
 
     Args:
         image_bytes (bytes): Image to process
 
     Returns:
-        Tensor: 4-dimensional PyTorch tensor where first dimension is batch (of size 1).
+        `torch.Tensor`: 4-dimensional PyTorch tensor where first dimension is batch (of size 1).
     """
     my_transforms = transforms.Compose([transforms.Resize(255),
                                         transforms.CenterCrop(224),
@@ -34,13 +33,14 @@ def transform_image_to_imagenet(image_bytes):
 
 class TransformImage:
     def __init__(self, model_name):
-        """
-        Apply transformation corresponding to the model. For torchvision models see func `transform_image_to_imagenet`.
+        """Apply transformation corresponding to the model.
+        For torchvision models see func `transform_image_to_imagenet`.
+
         Args:
             model_name (str): Model name to be applied to transformed image.
 
         Returns:
-            Tensor: 3-dimensional PyTorch tensor. Batch dimension should be added separately.
+            `torch.Tensor`: 3-dimensional PyTorch tensor. Batch dimension should be added separately.
         """
         logger.debug(f'Model name: {model_name}')
         if hasattr(torchvision.models, model_name):
@@ -51,15 +51,14 @@ class TransformImage:
             raise ValueError("Transformation for the specified model is not available")
 
     def __call__(self, image_bytes, *args, **kwargs):
-        """
-        Apply transformation to the image.
+        """Apply transformation to the image.
 
         Args:
-            image_bytes: bytes
+            image_bytes (bytes): image to transform
             *args:
             **kwargs:
 
         Returns:
-            image (Image): Transformed image
+            `Image`: Transformed image
         """
         return self.transform(image_bytes)

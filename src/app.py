@@ -47,16 +47,28 @@ def health_check():
 
 @app.route('/predict', methods=['GET', 'POST'])
 def predict():
-    """
-    Use POST method to submit an image file or GET method to submit an encoded url.
-    To test use the following examples.
-    POST method with an image file:
-    `curl -X POST -F file=@"<path_to_file.jpg>" http://<flask_domain>:5000/predict`
-    GET method with encoded url:
-    `curl -G --data-urlencode "url=<http://example.com/img.jpg>" http://<flask_domain>:5000/predict`
+    """Use POST method to submit an image file or GET method to submit an encoded url.
+
+    Examples:
+        POST method with an image file::
+
+            $ curl -X POST -F file=@"<path_to_file.jpg>" http://<api_url>:<api_port>/predict
+
+        GET method with encoded url::
+
+            $ curl -G --data-urlencode "url=<http://example.com/img.jpg>" http://<api_url>:<api_port>/predict
+
+        where <api_url> and <api_port> correspond to url and port where the service is deployed (e.g. 127.0.0.1:5000
+        for local deployment)
 
     Returns:
-        dict: {class_id: <class_id>, class_name: <class_name>}
+        dict: predicted class::
+
+            {
+                'class_id': class_id1,
+                'class_name': class_name1
+            }
+
     """
     if request.method == 'POST':
         try:
@@ -94,18 +106,25 @@ def predict():
 
 
 def get_prediction(image_bytes, device, model, transform_image):
-    """
+    """Run model prediction for the sample image.
     For provided image and model name, perform necessary transformations, apply model (forward pass) and select best
     prediction.
+
     Args:
         image_bytes (bytes): Image to process
-        device (str or torch.device): device to run prediction on
-        transform_image:
-            transformation to apply to the original image. Should be a class instance with method __call__ implemented.
-        model: model instance
+        device (str or torch.device): Device to run prediction on.
+        transform_image (class): Transformation to apply to the original image.
+            Should be a class instance with method ``__call__`` implemented.
+        model (torch.nn.Module): Model instance.
 
     Returns:
-        dict: {class_id: <class_id>, class_name: <class_name>}
+        dict: predicted class::
+
+            {
+                'class_id': <class_id>,
+                'class_name': <class_name>
+            }
+
     """
     tensor = transform_image(image_bytes=image_bytes)
     tensor.unsqueeze_(0)
@@ -151,6 +170,35 @@ def upload_file():
 
 @app.route('/predict_batch', methods=['POST'])
 def predict_batch():
+    """Run model prediction.
+    Given the supplied json or csv file with list of http(s) or s3 urls of images provide corresponding predictions.
+
+    Example::
+
+        {
+            "urls": [
+                "s3://open-images-dataset/validation/2fdfbf67d50e7726.jpg",
+                "s3://open-images-dataset/validation/2fed663b4eb60fc8.jpg",
+        }
+
+    CSV should have a single column without headers.
+
+    Returns:
+        json: predicted class id and name according to class mapping dict
+        Example::
+
+            [
+              [
+                "n02690373",
+                "airliner"
+              ],
+              [
+                "n04429376",
+                "throne"
+              ]
+            ]
+
+    """
     if request.method == 'POST':
         response_file = request.files['file']
         if response_file is None:
@@ -168,10 +216,11 @@ def predict_batch():
 
 
 def reload_model(model_name):
-    """
-    Load another model into global variable along with corresponding class mapping and transform function.
+    """Reload the model and related.
+    Load a different model, corresponding class mapping and transform function into the global variables.
+
     Args:
-        model_name: str
+        model_name (str): model name according to torchvision or custom model name, e.g. ``resnext101_32x8d``
     """
     app.logger.info(f'Reloading model: {model_name}')
     global default_model, default_class_mapping, default_transform_image
@@ -180,24 +229,47 @@ def reload_model(model_name):
     default_transform_image = TransformImage(model_name)
 
 
-def get_dataloader(url_list):
-    batch_size = min(len(url_list), cfg.batch_size)
+def get_dataloader(url_list, model_name=cfg.model_name, batch_size=cfg.batch_size, num_workers=cfg.num_workers):
+    """Create and return an instance of dataloader
+
+    Args:
+        url_list (list): List of http(s) or S3 urls to fetch images from.
+        model_name (str, optional): Model name, used for corresponding TransformImage class.
+            Default: derived from the config.
+        batch_size (int, optional): Batch size, in case of GPU should be adjusted corresponding to model size and
+            available memory on device. Default: derived from the config.
+        num_workers (int, optional): Number of workers for dataloader. Default: derived from the config.
+
+    Returns:
+        `DataLoader`: torch dataloader instance
+    """
+    batch_size = min(len(url_list), batch_size)
     app.logger.debug(f'Batch size: {batch_size}')
     dataset = ImageDataset(url_list,
-                           transform=TransformImage(model_name=cfg.model_name)
+                           transform=TransformImage(model_name=model_name)
                            )
     dataloader = DataLoader(dataset,
                             batch_size=batch_size,
                             shuffle=False,
-                            num_workers=cfg.num_workers)
+                            num_workers=num_workers)
     return dataloader
 
 
-def predict_all_samples(dataloader, model):
+def predict_all_samples(dataloader, model, device=cfg.device):
+    """Using the dataloader and model supplied, make prediction for each sample.
+
+    Args:
+        dataloader (`DataLoader`): DataLoader instance
+        model (`torch.nn.Module`): Model instance
+        device (str or `torch.device`): Device, the same as for the model. Default: derived from the config.
+
+    Returns:
+        list: Predictions sorted in the same order as samples.
+    """
     all_predictions = list()
     for batch_sample in dataloader:
         with torch.no_grad():
-            outputs = model.forward(batch_sample.to(cfg.device))
+            outputs = model.forward(batch_sample.to(device))
             _, predicted_class_indices = outputs.max(1)
             batch_predictions = [tuple(default_class_mapping[str(y_hat)]) for y_hat in predicted_class_indices.tolist()]
         all_predictions.extend(batch_predictions)

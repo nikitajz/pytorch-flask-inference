@@ -11,7 +11,14 @@ s3_resource = boto3.resource('s3', config=Config(signature_version=UNSIGNED))
 
 
 def split_s3_path(url):
-    """Split a full s3 path into the bucket name and path."""
+    """Split a full s3 path into the bucket name and path.
+
+    Args:
+        url (str): S3 url.
+
+    Returns:
+        tuple: (bucket_name, s3_path)
+    """
     parsed = urlparse(url)
     if not parsed.netloc or not parsed.path:
         raise ValueError("bad s3 path {}".format(url))
@@ -35,25 +42,26 @@ def s3_get_file(url):
 
 
 class ImageDataset(Dataset):
-    """Remote dataset (http(s) or S3 urls)"""
 
     def __init__(self, urls, transform=None):
-        """
+        """Remote dataset (http(s) or S3 urls)
+
         Args:
-            urls: list of http(s) or S3 urls
+            urls (list[str]): http(s) or S3 urls
+            transform (class, optional): A class instance with __call__ method implemented. Default: None
         """
         self.urls = urls
         self.transform = transform
 
     @staticmethod
     def _download_image(url):
-        """
-        Download image file from http(s) or S3 url.
+        """Download image file from http(s) or S3 url.
+
         Args:
-            url: http(s)- or S3-compliant url
+            url (str): http(s)- or S3-compliant url
 
         Returns:
-            Image: bytes
+            bytes: Image
         """
         if url.startswith("s3://"):
             img_bytes = s3_get_file(url)
@@ -68,9 +76,22 @@ class ImageDataset(Dataset):
         return img_bytes
 
     def __len__(self):
+        """Length of urls list.
+
+        Returns:
+            int: Length of urls list
+        """
         return len(self.urls)
 
     def __getitem__(self, idx):
+        """Standard dataset method to fetch an item by index. Downloads an image from url on the fly.
+
+        Args:
+            idx (int): Index of dataset item.
+
+        Returns:
+            bytes: Image
+        """
         img = self._download_image(self.urls[idx])
         if self.transform:
             img = self.transform(img)
