@@ -28,7 +28,14 @@ def split_s3_path(url):
 
 
 def s3_get_file(url):
-    """Download a file from S3."""
+    """Download a file from S3.
+
+    Args:
+        url (str): http(s)- or S3-compliant url
+
+    Returns:
+        bytes: Image
+    """
     bucket_name, s3_path = split_s3_path(url)
     try:
         s3_response_object = s3_resource.Object(bucket_name, s3_path).get()
