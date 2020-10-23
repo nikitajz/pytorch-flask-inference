@@ -10,8 +10,8 @@ Take into account that the app downloads pre-trained models' weights, with defau
 In order to run docker container, first install [docker](https://docs.docker.com/engine/install/) and [docker-compose](https://docs.docker.com/compose/install/).
 Then run the following commands (in the directory where you want to clone git repo):
 ```shell script
-git clone https://github.com/nikitajz/ml_prod
-cd ml_prod
+git clone https://github.com/nikitajz/pytorch-flask-inference
+cd pytorch-flask-inference
 docker compose up --build
 ```
 
